@@ -1,28 +1,69 @@
 {
   "AWSTemplateFormatVersion":"2010-09-09",
-  "Description":"Master dromedary stack that calls nested stacks",
+  "Description":"Master pipeline stack that calls nested stacks",
   "Parameters":{
     "TemplateBucketName":{
       "Type":"String",
-      "Description":"S3 bucket name for all the CloudFormation templates used in Dromedary.",
+      "Description":"S3 bucket name for all the CloudFormation templates used in the pipeline.",
       "Default": "gulp-serverless-pipeline"
     },
-    "SiteBucketName":{
+    "TestSiteFQDN":{
       "Type":"String",
-      "Description":"Unique name to use for bucket to serve static website content.",
-      "Default":"dromedary-stateless-site"
+      "Description":"Unique name to use for bucket and Route53 to serve static website content for test stage.",
+    },
+    "ProdSiteFQDN":{
+      "Type":"String",
+      "Description":"Unique name to use for bucket and Route53 to serve static website content for production stage.",
     },
     "DDBTableName":{
       "Type":"String",
-      "Description":"Unique name for the Dromedary Dynamo DB table"
-    }
+      "Description":"Unique name for the Dynamo DB table"
+    },
+    "GitHubToken":{
+      "NoEcho":"true",
+      "Type":"String",
+      "Description":"Secret. It might look something like 9b189a1654643522561f7b3ebd44a1531a4287af OAuthToken with access to Repo. Go to https://github.com/settings/tokens"
+    },
+    "GitHubUser":{
+      "Type":"String",
+      "Description":"GitHub UserName",
+      "Default":"stelligent"
+    },
+    "GitHubRepo":{
+      "Type":"String",
+      "Description":"GitHub Repo to pull from. Only the Name. not the URL",
+      "Default":"dromedary-serverless"
+    },
+    "GitHubBranch":{
+      "Type":"String",
+      "Description":"Branch to use from Repo. Only the Name. not the URL",
+      "Default":"master"
+    },
+    "GulpPackageTask":{
+      "Type":"String",
+      "Description":"Gulp task name to package the app",
+      "Default":"package"
+    },
+    "GulpTestTask":{
+      "Type":"String",
+      "Description":"Gulp task name for Unit Testing",
+      "Default":"test"
+    },
   },
   "Metadata" : {
     "AWS::CloudFormation::Interface" : {
       "ParameterGroups" : [
         {
           "Label" : { "default" : "App Configuration" },
-          "Parameters" : [ "DDBTableName", "SiteBucketName" ]
+          "Parameters" : [ "TestSiteFQDN","ProdSiteFQDN","DDBTableName" ]
+        },
+        {
+          "Label" : { "default" : "GitHub Configuration" },
+          "Parameters" : [ "GitHubToken","GitHubUser", "GitHubRepo", "GitHubBranch" ]
+        },
+        {
+          "Label" : { "default" : "Gulp Configuration" },
+          "Parameters" : [ "GulpPackageTask", "GulpTestTask"]
         },
         {
           "Label" : { "default":"CloudFormation Configuration" },
@@ -30,8 +71,15 @@
         }
       ],
       "ParameterLabels" : {
+        "GitHubToken" : { "default" : "OAuth2 Token" },
+        "GitHubUser" : { "default" : "User Name" },
+        "GitHubRepo" : { "default" : "Repository Name" },
+        "GitHubBranch" : { "default" : "Branch Name" },
+        "GulpPackageTask":{ "default": "Unit Test and Package Task"},
+        "GulpTestTask":{ "default": "Functional Testing Task"},
         "TemplateBucketName" : { "default" : "CFN Template Bucket Name" },
-        "SiteBucketName" : { "default" : "Website Bucket Name" },
+        "TestSiteFQDN" : { "default" : "Test DNS Name" },
+        "ProdSiteFQDN" : { "default" : "Production DNS Name" },
         "DDBTableName" : { "default" : "DynamoDB Table Name" }
       }
     }
@@ -53,6 +101,36 @@
     }
   },
   "Resources":{
+    "PipelineStack":{
+      "Type":"AWS::CloudFormation::Stack",
+      "Properties":{
+        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "pipeline.json"]] },
+        "TimeoutInMinutes":"60",
+        "Parameters":{
+          "TemplateBucketName":{
+            "Ref": "TemplateBucketName"
+          },
+          "GitHubToken":{
+            "Ref": "GitHubToken"
+          },
+          "GitHubUser":{
+            "Ref": "GitHubUser"
+          },
+          "GitHubRepo":{
+            "Ref": "GitHubRepo"
+          },
+          "GitHubBranch":{
+            "Ref": "GitHubBranch"
+          },
+          "GulpPackageTask":{
+            "Ref": "GulpPackageTask"
+          },
+          "GulpTestTask":{
+            "Ref": "GulpTestTask"
+          }
+        }
+      }
+    },
     "DynamoDBStack":{
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
@@ -119,13 +197,21 @@
       "Value" : { "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ] } ,
       "Description" : "App Lambda Arn"
     },
-    "ApiURL" : {
-      "Value" : { "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.ApiURL" ] } ,
-      "Description" : "Api URL"
+    "TestApiUrl" : {
+      "Value" : { "Fn::GetAtt" : [ "S3Stack", "Outputs.TestApiUrl" ] } ,
+      "Description" : "Test Api Url"
     },
-    "SiteURL" : {
-      "Value" : { "Fn::GetAtt" : [ "S3Stack", "Outputs.SiteURL" ] } ,
-      "Description" : "Site URL"
+    "TestSiteUrl" : {
+      "Value" : { "Fn::GetAtt" : [ "S3Stack", "Outputs.TestSiteUrl" ] } ,
+      "Description" : "Test Site Url"
+    },
+    "ApiUrl" : {
+      "Value" : { "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.ApiUrl" ] } ,
+      "Description" : "Production Api Url"
+    },
+    "SiteUrl" : {
+      "Value" : { "Fn::GetAtt" : [ "S3Stack", "Outputs.SiteUrl" ] } ,
+      "Description" : "Production Site Url"
     }
   }
 }
