@@ -1,8 +1,8 @@
 # Overview
-This project integrates AWS Lambda with API Gateway as the interface to demonstrate serverless architecture.  It also demonstrates the use of CodePipeline with Lambdas to continuously deliver changes made in the source code in a serverless manner.
+This project provides a pipeline for running Express apps on AWS Lambda with API Gateway as the interface in a  serverless architecture.  It also uses CodePipeline with Lambdas to continuously deliver changes made in the source code in a serverless manner.
 
 # Architecture Overview
-The application is split into 2 separate parts for deployment:
+The application is deployed in 2 parts:
 
 * **API** - deployed as a Lambda function using API Gateway for the front end.
 * **Static Content** - deployed into an S3 bucket with website hosting enabled.
