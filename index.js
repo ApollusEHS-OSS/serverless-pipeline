@@ -15,7 +15,7 @@ exports.registerTasks = function ( gulp, opts ) {
     cloudFormation = new AWS.CloudFormation();
 
     var stackName = opts.stackName || 'serverless-pipeline';
-    var cfnBucket = opts.cfnBucket || 'gulp-serverless-pipeline';
+    var cfnBucket = opts.cfnBucket || 'serverless-pipeline';
     var taskPrefix = opts.taskPrefix || 'pipeline';
 
 

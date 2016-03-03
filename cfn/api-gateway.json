@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion":"2010-09-09",
-  "Description":"Dromedary demo - apigateway for the application",
+  "Description":"apigateway for the application",
   "Parameters":{
     "BucketName":{
       "Type":"String",
@@ -10,14 +10,13 @@
       "Type":"String",
       "Description":"The Arn of the lambda to integrate the gateway with"
     },
-    "ApiStageName":{
+    "TestDDBTableName":{
       "Type":"String",
-      "Description":"The Arn of the lambda to integrate the gateway with",
-      "Default":"prod"
+      "Description":"The DynamoDB table name for test stage"
     },
-    "DDBTableName":{
+    "ProdDDBTableName":{
       "Type":"String",
-      "Description":"The DynamoDB table name"
+      "Description":"The DynamoDB table name for prod stage"
     }
   },
   "Resources" : {
@@ -301,7 +300,7 @@
               "arn:aws:apigateway:",
               { "Ref": "AWS::Region" },
               ":lambda:path/2015-03-31/functions/",
-              { "Ref":"AppLambdaArn" },
+              { "Fn:Join": ["",[{ "Ref":"AppLambdaArn" },":${stageVariables.AppVersion}" ]] },
               "/invocations"
             ]
           ]
@@ -367,7 +366,7 @@
         }
       }
     },
-    "ApiDeployment": {
+    "ApiTestDeployment": {
       "DependsOn": [
         "RestApi",
         "RootResource",
@@ -380,9 +379,30 @@
       "Properties": {
         "ServiceToken" : { "Fn::GetAtt":[ "ApiGatewayDeployment", "Arn" ] },
         "RestApiId": { "Ref": "RestApi" },
-        "StageName": { "Ref": "ApiStageName"},
+        "StageName": "test",
         "Variables": {
-          "DDBTableName": { "Ref": "DDBTableName" }
+          "DDBTableName": { "Ref": "TestDDBTableName" },
+          "AppVersion": "test"
+        }
+      }
+    },
+    "ApiProdDeployment": {
+      "DependsOn": [
+        "RestApi",
+        "RootResource",
+        "RootGetMethod",
+        "RootGetMethodResponse",
+        "RootIntegration",
+        "RootIntegrationResponse"
+      ],
+      "Type": "Custom::ApiGatewayDeployment",
+      "Properties": {
+        "ServiceToken" : { "Fn::GetAtt":[ "ApiGatewayDeployment", "Arn" ] },
+        "RestApiId": { "Ref": "RestApi" },
+        "StageName": "prod",
+        "Variables": {
+          "DDBTableName": { "Ref": "ProdDDBTableName" },
+          "AppVersion": "prod"
         }
       }
     }
@@ -391,8 +411,14 @@
     "StackName":{
       "Value":{ "Ref":"AWS::StackName" }
     },
-    "ApiURL": {
-      "Value": { "Fn::Join": [ "", [ "https://", { "Ref": "RestApi"}, ".execute-api.",{"Ref":"AWS::Region"},".amazonaws.com/",{"Ref":"ApiStageName"}] ] }
+    "ApiName": {
+      "Value": { "Ref": "RestApi"}
+    },
+    "TestApiURL": {
+      "Value": { "Fn::Join": [ "", [ "https://", { "Ref": "RestApi"}, ".execute-api.",{"Ref":"AWS::Region"},".amazonaws.com/test"] ] }
+    },
+    "ProdApiURL": {
+      "Value": { "Fn::Join": [ "", [ "https://", { "Ref": "RestApi"}, ".execute-api.",{"Ref":"AWS::Region"},".amazonaws.com/prod"] ] }
     }
   }
 }

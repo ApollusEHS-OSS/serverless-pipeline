@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion":"2010-09-09",
-  "Description":"Dromedary demo - s3 buckets for each stage",
+  "Description":"s3 buckets for sites at each stage",
   "Parameters":{
     "SiteBucketName":{
       "Type":"String",

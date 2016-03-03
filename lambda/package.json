@@ -1,11 +1,11 @@
 {
-  "name": "codepipeline-gulp",
+  "name": "serverless-pipeline-actions",
   "version": "0.1.0",
   "description": "Lambda to run gulp within codepipeline",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/stelligent/dromedary-serverless.git"
+    "url": "git+ssh://git@github.com/cplee/serverless-pipeline.git"
   },
   "main": "index.js",
   "dependencies": {

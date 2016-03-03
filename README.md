@@ -33,7 +33,7 @@ To integrate with GitHub, AWS CodePipeline uses OAuth tokens.  Generate your tok
 * `admin:repo_hook`, which is used to detect when you have committed and pushed changes to the repository
 * `repo`, which is used to read and pull artifacts from public and private repositories into a pipeline
 
-You can launch via the console: [![Launch Pipeline stack](https://s3.amazonaws.com/stelligent-training-public/public/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#cstack=sn~serverless-pipeline|turl~https://s3-us-west-2.amazonaws.com/gulp-serverless-pipeline/master.json)
+You can launch via the console: [![Launch Pipeline stack](https://s3.amazonaws.com/stelligent-training-public/public/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#cstack=sn~serverless-pipeline|turl~https://s3-us-west-2.amazonaws.com/serverless-pipeline/master.json)
 
 Or you can launch by using `gulp`:
 
@@ -41,7 +41,7 @@ Or you can launch by using `gulp`:
   * Install Node.js: `sudo yum install nodejs npm --enablerepo=epel` (For OS X, check out [nodejs.org](https://nodejs.org/en/download/))
   * Update NPM: `curl -L https://npmjs.org/install.sh | sudo sh`
   * Install Gulp: `sudo npm install -g gulp`
-* Install this module: `npm install --save-dev gulp-serverless-pipeline`
+* Install this module: `npm install --save-dev serverless-pipeline`
 * Add the following to your gulpfile:
 ```
 var opts = {
@@ -50,7 +50,7 @@ var opts = {
     githubUser: 'my-github-username',
     githubRepo: 'my-github-repo'
 }
-var gpipeline = require('gulp-serverless-pipeline')
+var gpipeline = require('serverless-pipeline')
 gpipeline.registerTasks(gulp,opts);
 ```
 * Bring the pipeline up with `gulp pipeline:up --token=XXXXXXXXXXXXXXXXX`

@@ -11,12 +11,12 @@ var fs          = require('fs');
 
 var opts = {
     region: (gutil.env.region || 'us-west-2'),
-    stackName: (gutil.env.stackName || 'dromedary-serverless'),
-    cfnBucket: (gutil.env.templateBucket || 'gulp-serverless-pipeline'),
+    stackName: (gutil.env.stackName || 'serverless-pipeline'),
+    cfnBucket: (gutil.env.templateBucket || 'serverless-pipeline'),
     githubToken: gutil.env.token,
     githubUser: 'stelligent',
-    githubRepo: 'dromedary',
-    githubBranch: 'serverless'
+    githubRepo: 'dromedary-serverless',
+    githubBranch: 'master'
 }
 var gpipeline = require('.')
 gpipeline.registerTasks(gulp,opts);

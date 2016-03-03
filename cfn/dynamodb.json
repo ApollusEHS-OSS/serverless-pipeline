@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion":"2010-09-09",
-  "Description":"Dromedary demo - DynamoDB Table",
+  "Description":"DynamoDB Table",
   "Parameters":{
     "ReadCapacityUnits":{
       "Type":"Number",
@@ -11,19 +11,12 @@
       "Type":"Number",
       "Description":"Provisioned Write Capacity Units",
       "Default":"5"
-    },
-    "DDBTableName":{
-      "Type":"String",
-      "Description":"Unique name for the Dromedary Dynamo DB table"
     }
   },
   "Resources":{
     "Table":{
       "Type":"AWS::DynamoDB::Table",
       "Properties":{
-        "TableName":{
-          "Ref":"DDBTableName"
-        },
         "AttributeDefinitions":[
           {
             "AttributeName":"site_name",
@@ -56,16 +49,9 @@
     }
   },
   "Outputs":{
-    "StackName":{
-      "Value":{
-        "Ref":"AWS::StackName"
-      }
-    },
     "TableName":{
       "Description":"Name of DynamoDB Table",
-      "Value":{
-        "Ref":"Table"
-      }
+      "Value":{ "Ref":"Table" }
     }
   }
 }

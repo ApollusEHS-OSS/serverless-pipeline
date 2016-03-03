@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion":"2010-09-09",
-  "Description":"Dromedary demo - lambda for the application",
+  "Description":"lambda for the application",
   "Parameters":{
     "AppRole":{
       "Type":"String",
@@ -33,7 +33,7 @@
             "};"
           ]]}
         },
-        "Description" : "Dromedary application",
+        "Description" : "serverless application",
         "Handler" : "index.handler",
         "MemorySize" : { "Ref":"AppMemorySize"},
         "Timeout" : { "Ref":"AppTimeout"},

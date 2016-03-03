@@ -5,19 +5,15 @@
     "TemplateBucketName":{
       "Type":"String",
       "Description":"S3 bucket name for all the CloudFormation templates used in the pipeline.",
-      "Default": "gulp-serverless-pipeline"
+      "Default": "serverless-pipeline"
     },
     "TestSiteFQDN":{
       "Type":"String",
-      "Description":"Unique name to use for bucket and Route53 to serve static website content for test stage.",
+      "Description":"Unique name to use for bucket and Route53 to serve static website content for test stage."
     },
     "ProdSiteFQDN":{
       "Type":"String",
-      "Description":"Unique name to use for bucket and Route53 to serve static website content for production stage.",
-    },
-    "DDBTableName":{
-      "Type":"String",
-      "Description":"Unique name for the Dynamo DB table"
+      "Description":"Unique name to use for bucket and Route53 to serve static website content for production stage."
     },
     "GitHubToken":{
       "NoEcho":"true",
@@ -49,6 +45,21 @@
       "Description":"Gulp task name for Unit Testing",
       "Default":"test"
     },
+    "DistSitePath":{
+      "Type":"String",
+      "Description":"Path where GulpPackageTask places the site artifact",
+      "Default":"dist/site.zip"
+    },
+    "DistLambdaPath":{
+      "Type":"String",
+      "Description":"Path where GulpPackageTask places the lambda artifact",
+      "Default":"dist/lambda.zip"
+    },
+    "DistSwaggerPath":{
+      "Type":"String",
+      "Description":"Path where GulpPackageTask places the lambda artifact",
+      "Default":"dist/swagger.json"
+    }
   },
   "Metadata" : {
     "AWS::CloudFormation::Interface" : {
@@ -63,7 +74,7 @@
         },
         {
           "Label" : { "default" : "Gulp Configuration" },
-          "Parameters" : [ "GulpPackageTask", "GulpTestTask"]
+          "Parameters" : [ "GulpPackageTask", "GulpTestTask", "DistSitePath", "DistLambdaPath", "DistSwaggerPath"]
         },
         {
           "Label" : { "default":"CloudFormation Configuration" },
@@ -77,10 +88,13 @@
         "GitHubBranch" : { "default" : "Branch Name" },
         "GulpPackageTask":{ "default": "Unit Test and Package Task"},
         "GulpTestTask":{ "default": "Functional Testing Task"},
+        "DistSitePath":{ "default": "Path to Site Dist"},
+        "DistLambdaPath":{ "default": "Path to Lambda Dist"},
+        "DistSwaggerPath":{ "default": "Path to Swagger Dist"},
         "TemplateBucketName" : { "default" : "CFN Template Bucket Name" },
         "TestSiteFQDN" : { "default" : "Test DNS Name" },
         "ProdSiteFQDN" : { "default" : "Production DNS Name" },
-        "DDBTableName" : { "default" : "DynamoDB Table Name" }
+        "DDBTableName" : { "default" : "DynamoDB Table Name Prefix" }
       }
     }
   },
@@ -103,6 +117,7 @@
   "Resources":{
     "PipelineStack":{
       "Type":"AWS::CloudFormation::Stack",
+      "DependsOn": [ "IAMStack" ],
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "pipeline.json"]] },
         "TimeoutInMinutes":"60",
@@ -127,20 +142,49 @@
           },
           "GulpTestTask":{
             "Ref": "GulpTestTask"
+          },
+          "DistSitePath":{
+            "Ref": "DistSitePath"
+          },
+          "DistLambdaPath":{
+            "Ref": "DistLambdaPath"
+          },
+          "DistSwaggerPath":{
+            "Ref": "DistSwaggerPath"
+          },
+          "TestBucketName":{
+            "Ref": "TestSiteFQDN"
+          },
+          "TestEndpoint":{
+            "Fn::GetAtt" : [ "TestS3Stack", "Outputs.SiteUrl" ]
+          },
+          "ProdBucketName":{
+            "Ref": "ProdSiteFQDN"
+          },
+          "ApiName":{
+            "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.ApiName" ]
+          },
+          "CodePipelineRoleArn":{
+            "Fn::GetAtt" : [ "IAMStack", "Outputs.CodePipelineRoleArn" ]
+          },
+          "CodePipelineLambdaRoleArn":{
+            "Fn::GetAtt" : [ "IAMStack", "Outputs.CodePipelineLambdaRoleArn" ]
           }
         }
       }
     },
-    "DynamoDBStack":{
+    "TestDynamoDBStack":{
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "dynamodb.json"]] },
         "TimeoutInMinutes":"60",
-        "Parameters":{
-          "DDBTableName":{
-            "Ref":"DDBTableName"
-          }
-        }
+      }
+    },
+    "ProdDynamoDBStack":{
+      "Type":"AWS::CloudFormation::Stack",
+      "Properties":{
+        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "dynamodb.json"]] },
+        "TimeoutInMinutes":"60",
       }
     },
     "ApiGatewayStack":{
@@ -150,7 +194,8 @@
         "TimeoutInMinutes":"60",
         "Parameters":{
           "BucketName":{ "Ref":"TemplateBucketName" },
-          "DDBTableName":{ "Ref": "DDBTableName" },
+          "TestDDBTableName":{ "Fn::GetAtt": ["TestDynamoDBStack", "Outputs.TableName"]},
+          "ProdDDBTableName":{ "Fn::GetAtt": ["ProdDynamoDBStack", "Outputs.TableName"]},
           "AppLambdaArn":{ "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ] }
         }
       }
@@ -167,13 +212,22 @@
         }
       }
     },
-    "S3Stack":{
+    "TestS3Stack":{
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "s3.json"]] },
         "TimeoutInMinutes":"60",
         "Parameters":{
-          "SiteBucketName":{ "Ref":"SiteBucketName" } }
+          "SiteBucketName":{ "Ref":"TestSiteFQDN" } }
+      }
+    },
+    "ProdS3Stack":{
+      "Type":"AWS::CloudFormation::Stack",
+      "Properties":{
+        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "s3.json"]] },
+        "TimeoutInMinutes":"60",
+        "Parameters":{
+          "SiteBucketName":{ "Ref":"ProdSiteFQDN" } }
       }
     },
     "IAMStack":{
@@ -181,11 +235,6 @@
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "iam.json"]] },
         "TimeoutInMinutes":"60",
-        "Parameters":{
-          "DDBTableName":{
-            "Ref":"DDBTableName"
-          }
-        }
       }
     }
   },
@@ -193,25 +242,19 @@
     "StackName": {
       "Value": { "Ref": "AWS::StackName" }
     },
-    "AppLambdaArn"  : {
-      "Value" : { "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ] } ,
-      "Description" : "App Lambda Arn"
-    },
-    "TestApiUrl" : {
-      "Value" : { "Fn::GetAtt" : [ "S3Stack", "Outputs.TestApiUrl" ] } ,
-      "Description" : "Test Api Url"
-    },
     "TestSiteUrl" : {
-      "Value" : { "Fn::GetAtt" : [ "S3Stack", "Outputs.TestSiteUrl" ] } ,
+      "Value" : { "Fn::GetAtt" : [ "TestS3Stack", "Outputs.SiteUrl" ] } ,
       "Description" : "Test Site Url"
     },
-    "ApiUrl" : {
-      "Value" : { "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.ApiUrl" ] } ,
-      "Description" : "Production Api Url"
-    },
-    "SiteUrl" : {
-      "Value" : { "Fn::GetAtt" : [ "S3Stack", "Outputs.SiteUrl" ] } ,
+    "ProdSiteUrl" : {
+      "Value" : { "Fn::GetAtt" : [ "ProdS3Stack", "Outputs.SiteUrl" ] } ,
       "Description" : "Production Site Url"
+    },
+    "PipelineUrl": {
+      "Value": {
+        "Value" : { "Fn::GetAtt" : [ "PipelineStack", "Outputs.PipelineUrl" ] } ,
+        "Description" : "Pipeline Url"
+      }
     }
   }
 }
