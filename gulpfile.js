@@ -23,8 +23,8 @@ var opts = {
     distSwaggerPath: 'dist/swagger.json',
     githubToken: gutil.env.token,
     githubUser: 'stelligent',
-    githubRepo: 'dromedary-serverless',
-    githubBranch: 'refactor'
+    githubRepo: 'dromedary',
+    githubBranch: 'serverless'
 }
 var util = require('./util.js')
 var gpipeline = require('.')
