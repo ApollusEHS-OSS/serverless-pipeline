@@ -23,7 +23,7 @@
     "StackName":{
       "Value":{ "Ref":"AWS::StackName" }
     },
-    "SiteURL" : {
+    "SiteUrl" : {
       "Value" : { "Fn::GetAtt" : [ "SiteBucket", "WebsiteURL" ] },
       "Description" : "Site URL"
     }

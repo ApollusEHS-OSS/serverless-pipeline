@@ -66,7 +66,7 @@
       "ParameterGroups" : [
         {
           "Label" : { "default" : "App Configuration" },
-          "Parameters" : [ "TestSiteFQDN","ProdSiteFQDN","DDBTableName" ]
+          "Parameters" : [ "TestSiteFQDN","ProdSiteFQDN" ]
         },
         {
           "Label" : { "default" : "GitHub Configuration" },
@@ -93,8 +93,7 @@
         "DistSwaggerPath":{ "default": "Path to Swagger Dist"},
         "TemplateBucketName" : { "default" : "CFN Template Bucket Name" },
         "TestSiteFQDN" : { "default" : "Test DNS Name" },
-        "ProdSiteFQDN" : { "default" : "Production DNS Name" },
-        "DDBTableName" : { "default" : "DynamoDB Table Name Prefix" }
+        "ProdSiteFQDN" : { "default" : "Production DNS Name" }
       }
     }
   },
@@ -122,7 +121,7 @@
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "pipeline.json"]] },
         "TimeoutInMinutes":"60",
         "Parameters":{
-          "TemplateBucketName":{
+          "LambdaBucketName":{
             "Ref": "TemplateBucketName"
           },
           "GitHubToken":{
@@ -161,8 +160,20 @@
           "ProdBucketName":{
             "Ref": "ProdSiteFQDN"
           },
+          "ProdEndpoint":{
+            "Fn::GetAtt" : [ "ProdS3Stack", "Outputs.SiteUrl" ]
+          },
           "ApiName":{
             "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.ApiName" ]
+          },
+          "TestApiUrl":{
+            "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.TestApiUrl" ]
+          },
+          "ProdApiUrl":{
+            "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.ProdApiUrl" ]
+          },
+          "AppFunctionName":{
+              "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ]
           },
           "CodePipelineRoleArn":{
             "Fn::GetAtt" : [ "IAMStack", "Outputs.CodePipelineRoleArn" ]
@@ -177,14 +188,14 @@
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "dynamodb.json"]] },
-        "TimeoutInMinutes":"60",
+        "TimeoutInMinutes":"60"
       }
     },
     "ProdDynamoDBStack":{
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "dynamodb.json"]] },
-        "TimeoutInMinutes":"60",
+        "TimeoutInMinutes":"60"
       }
     },
     "ApiGatewayStack":{
@@ -196,7 +207,9 @@
           "BucketName":{ "Ref":"TemplateBucketName" },
           "TestDDBTableName":{ "Fn::GetAtt": ["TestDynamoDBStack", "Outputs.TableName"]},
           "ProdDDBTableName":{ "Fn::GetAtt": ["ProdDynamoDBStack", "Outputs.TableName"]},
-          "AppLambdaArn":{ "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ] }
+          "AppLambdaArn":{ "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ] },
+          "ApiGatewayCfnLambdaRole":{ "Fn::GetAtt" : [ "IAMStack", "Outputs.ApiGatewayCfnLambdaRole" ] },
+          "ApiIntegrationCredentialsRole":{ "Fn::GetAtt" : [ "IAMStack", "Outputs.ApiIntegrationCredentialsRole" ] }
         }
       }
     },
@@ -234,14 +247,11 @@
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "iam.json"]] },
-        "TimeoutInMinutes":"60",
+        "TimeoutInMinutes":"60"
       }
     }
   },
   "Outputs":{
-    "StackName": {
-      "Value": { "Ref": "AWS::StackName" }
-    },
     "TestSiteUrl" : {
       "Value" : { "Fn::GetAtt" : [ "TestS3Stack", "Outputs.SiteUrl" ] } ,
       "Description" : "Test Site Url"
@@ -252,9 +262,17 @@
     },
     "PipelineUrl": {
       "Value": {
-        "Value" : { "Fn::GetAtt" : [ "PipelineStack", "Outputs.PipelineUrl" ] } ,
-        "Description" : "Pipeline Url"
-      }
+        "Fn::Join": [
+          "",
+          [
+            "https://console.aws.amazon.com/codepipeline/home?region=",
+            { "Ref": "AWS::Region" },
+            "#/view/",
+            { "Fn::GetAtt" : [ "PipelineStack", "Outputs.PipelineName" ] }
+          ]
+        ]
+      },
+      "Description" : "Pipeline Url"
     }
   }
 }

@@ -12,6 +12,9 @@ var tar      = require('tar');     // for .tar.gz
 var zlib     = require('zlib');    // for .tar.gz
 var fstream  = require("fstream"); // for .tar.gz
 
+var mime     = require('mime');   // for S3 bucket upload
+var moment   = require('moment'); // for config version
+
 var childProcess = require('child_process'); // for exec
 var querystring  = require('querystring'); // for user parameters
 var Promise  = require('promise'); // for sanity!
@@ -21,6 +24,7 @@ if(!AWS.config.region) {
     AWS.config.region = process.env.AWS_DEFAULT_REGION;
 }
 var codepipeline = new AWS.CodePipeline();
+var lambda = new AWS.Lambda();
 var s3 = new AWS.S3({maxRetries: 10, signatureVersion: "v4"});
 
 // run npm
@@ -31,6 +35,11 @@ exports.npmHandler = function( event, context ) {
 // run gulp
 exports.gulpHandler = function( event, context ) {
     doAction(gulpAction, event, context);
+};
+
+// run deploy
+exports.deployHandler = function( event, context ) {
+    doAction(deployAction, event, context);
 };
 
 // run an action
@@ -153,12 +162,86 @@ function gulpAction(jobDetails) {
         }).then(function () {
             return installNpm(artifactExtractPath);
         }).then(function () {
-            return getJobDetails(jobDetails.id)
-        }).then(function (jd) {
-            var taskName = userParams['task'];
-            return runGulp(artifactExtractPath, taskName, jd.jobDetails.data.pipelineContext.pipelineName);
+            var env = {};
+            for(var key in userParams) {
+                var match = key.match(/^Env\.(.+)$/);
+                if(match) {
+                    env[match[1]] = userParams[key];
+                }
+            }
+
+            return runGulp(artifactExtractPath, userParams.task, env);
+        }).then(function() {
+            var rtn = Promise.resolve(true);
+            jobDetails.data.outputArtifacts.forEach(function(artifact) {
+                rtn = rtn.then(function() {
+                    return uploadOutputArtifact(jobDetails, artifact.name, artifactExtractPath + userParams[artifact.name]);
+                })
+            });
+
+            return rtn;
         });
 }
+
+
+
+// run deploy
+//
+// return: promise
+function deployAction(jobDetails) {
+    var userParams = querystring.parse(jobDetails.data.actionConfiguration.configuration.UserParameters);
+    switch (userParams.type) {
+        case 's3':
+            return deployS3Action(jobDetails,userParams.bucket,userParams.apiBaseurl);
+        case 'lambda':
+            return deployLambdaAction(jobDetails,userParams.alias,userParams.function);
+        case 'apigateway':
+            return deployApiGatewayAction(jobDetails,userParams.stage,userParams.name);
+        default:
+            return Promise.reject();
+    }
+}
+
+function deployS3Action(jobDetails,bucketName,apiBaseurl) {
+    var artifactZipPath = '/tmp/dist.zip';
+    var artifactExtractPath = '/tmp/dist/';
+    var artifactName = 'DistSiteOutput';
+
+    return downloadInputArtifact(jobDetails, artifactName, artifactZipPath)
+        .then(function () {
+            return rmdir(artifactExtractPath);
+        }).then(function () {
+            return extractZip(artifactZipPath, artifactExtractPath);
+        }).then(function () {
+            return uploadToS3(artifactExtractPath,bucketName);
+        }).then(function () {
+            // TODO: get version from github artifact, get apiBaseurl from ???
+            var version = "";
+            return uploadConfig(apiBaseurl,version,bucketName);
+        });
+}
+
+
+function deployLambdaAction(jobDetails,alias,functionName) {
+    var artifactZipPath = '/tmp/dist.zip';
+    var artifactName = 'DistLambdaOutput';
+
+    return downloadInputArtifact(jobDetails, artifactName, artifactZipPath)
+        .then(function () {
+            return uploadLambda(artifactZipPath,alias,functionName);
+        });
+};
+
+function deployApiGatewayAction(jobDetails,stageName,apiName) {
+    var artifactPath = '/tmp/dist.json';
+    var artifactName = 'DistSwaggerOutput';
+
+    return downloadInputArtifact(jobDetails, artifactName, artifactPath)
+        .then(function () {
+            // upload swagger to api gateway
+            return true;
+        });
+};
 
 
 // get codepipeline job details from aws
@@ -228,6 +311,99 @@ function uploadOutputArtifact(jobDetails, artifactName, path) {
     } else {
         return Promise.reject("Unknown Source Type:" + JSON.stringify(sourceOutput));
     }
+}
+
+function uploadToS3(dir,bucket) {
+    console.log("Uploading directory '" + dir + "' to '"+bucket+"'");
+
+    var rtn = Promise.resolve(true);
+    var files = fs.readdirSync(dir);
+    files.forEach(function(file) {
+        var path = dir + '/' + file;
+        if (!fs.statSync(path).isDirectory()) {
+            var params = {
+                Bucket: bucket,
+                Key: file,
+                ACL: 'public-read',
+                ContentType: mime.lookup(path),
+                CacheControl: 'no-cache, no-store, must-revalidate',
+                Expires: 0,
+            }
+
+            rtn = rtn.then(function() {
+                return putS3Object(params, path);
+            })
+        }
+    });
+    return rtn;
+}
+
+function uploadLambda(zipPath,alias,functionArn) {
+    return new Promise(function(resolve,reject) {
+        console.log("Uploading lambda '" + zipPath + "' to '"+functionArn+"'");
+        var params = {
+            FunctionName: functionArn,
+            Publish: true,
+            ZipFile: fs.readFileSync(zipPath)
+        };
+
+        lambda.updateFunctionCode(params, function(err, data) {
+            if (err) {
+                reject(err);
+            } else {
+                console.log("Tagging lambda version '"+data.Version+"' with '"+alias+"'");
+                var aliasParams = {
+                    FunctionName: functionArn,
+                    FunctionVersion: data.Version,
+                    Name: alias
+                };
+                lambda.deleteAlias({'FunctionName': functionArn, Name: alias}, function() {
+                    lambda.createAlias(aliasParams, function (err) {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+            }
+        });
+
+    });
+}
+
+function uploadConfig(apiBaseurl, version,bucketName) {
+    if(version == "") {
+        // default to a timestamp
+        version = moment().format('YYYYMMDD-HHmmss');
+    }
+
+    var config = {
+        apiBaseurl: apiBaseurl,
+        version: version
+    }
+
+    var params = {
+        Bucket: bucketName,
+        Key: 'config.json',
+        ACL: 'public-read',
+        CacheControl: 'no-cache, no-store, must-revalidate',
+        Expires: 0,
+        ContentType: 'application/javascript',
+        Body: JSON.stringify(config)
+    }
+
+    return new Promise(function(resolve,reject) {
+        console.log("Putting Config  '" + params.Bucket+"/"+params.Key + "' from: "+params.Body);
+
+        s3.putObject(params, function (err, data) {
+            if(err) {
+                reject(err);
+            } else {
+                resolve(data);
+            }
+        });
+    });
 }
 
 
@@ -365,16 +541,13 @@ function runNpm(packageDirectory, subcommand) {
 // run gulp
 //
 // return: promise
-function runGulp(packageDirectory, task, pipelineName) {
-
+function runGulp(packageDirectory, task, env) {
     console.log("Running gulp task '" + task + "' in '"+packageDirectory+"'");
     // clone the env, append npm to path
-    var envCopy = {};
-    for (var e in process.env) envCopy[e] = process.env[e];
-    envCopy['PATH'] += (':'+packageDirectory+'/node_modules/.bin/');
-    envCopy['PIPELINE_NAME'] = pipelineName;
-    console.log("PATH: "+envCopy['PATH']);
-    return exec('node '+packageDirectory+'/node_modules/gulp/bin/gulp.js --no-color '+task,{cwd: packageDirectory, env: envCopy});
+    for (var e in process.env) env[e] = process.env[e];
+    env['PATH'] += (':'+packageDirectory+'/node_modules/.bin/');
+    console.log("PATH: "+env['PATH']);
+    return exec('node '+packageDirectory+'/node_modules/gulp/bin/gulp.js --no-color '+task,{cwd: packageDirectory, env: env});
 }
 
 

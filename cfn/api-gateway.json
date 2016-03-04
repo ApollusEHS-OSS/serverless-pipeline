@@ -17,66 +17,17 @@
     "ProdDDBTableName":{
       "Type":"String",
       "Description":"The DynamoDB table name for prod stage"
+    },
+    "ApiGatewayCfnLambdaRole":{
+      "Type":"String",
+      "Description":"Role used by the CFN lambda for creating api gateway resources"
+    },
+    "ApiIntegrationCredentialsRole": {
+      "Type":"String",
+      "Description":"Role used by api gateway for calling app lambda function"
     }
   },
   "Resources" : {
-    "ApiGatewayLambdaRole":{
-      "Type":"AWS::IAM::Role",
-      "Properties":{
-        "AssumeRolePolicyDocument":{
-          "Statement":[
-            {
-              "Sid":"1",
-              "Effect":"Allow",
-              "Principal":{
-                "Service":[
-                  "lambda.amazonaws.com"
-                ]
-              },
-              "Action":"sts:AssumeRole"
-            }
-          ]
-        },
-        "Path":"/",
-        "Policies":[
-          {
-            "PolicyName": "LambdaPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
-                  ],
-                  "Resource": "arn:aws:logs:*:*:*"
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "apigateway:*"
-                  ],
-                  "Resource": [
-                    "*"
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Resource": [
-                    { "Fn::GetAtt": [ "IntegrationCredentialsRole", "Arn" ] }
-                  ],
-                  "Action": [
-                    "iam:PassRole"
-                  ]
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
     "ApiGatewayRestApi": {
       "Type" : "AWS::Lambda::Function",
       "Properties" : {
@@ -88,7 +39,7 @@
         "Handler" : "index.handler",
         "MemorySize" : 128,
         "Timeout" : 300,
-        "Role" : { "Fn::GetAtt":[ "ApiGatewayLambdaRole", "Arn" ] },
+        "Role" : { "Ref": "ApiGatewayCfnLambdaRole" },
         "Runtime" : "nodejs"
       }
     },
@@ -103,7 +54,7 @@
         "Handler" : "index.handler",
         "MemorySize" : 128,
         "Timeout" : 300,
-        "Role" : { "Fn::GetAtt":[ "ApiGatewayLambdaRole", "Arn" ] },
+        "Role" : { "Ref": "ApiGatewayCfnLambdaRole" },
         "Runtime" : "nodejs"
       }
     },
@@ -118,7 +69,7 @@
         "Handler" : "index.handler",
         "MemorySize" : 128,
         "Timeout" : 300,
-        "Role" : { "Fn::GetAtt":[ "ApiGatewayLambdaRole", "Arn" ] },
+        "Role" : { "Ref": "ApiGatewayCfnLambdaRole" },
         "Runtime" : "nodejs"
       }
     },
@@ -133,7 +84,7 @@
         "Handler" : "index.handler",
         "MemorySize" : 128,
         "Timeout" : 300,
-        "Role" : { "Fn::GetAtt":[ "ApiGatewayLambdaRole", "Arn" ] },
+        "Role" : { "Ref": "ApiGatewayCfnLambdaRole" },
         "Runtime" : "nodejs"
       }
     },
@@ -148,7 +99,7 @@
         "Handler" : "index.handler",
         "MemorySize" : 128,
         "Timeout" : 300,
-        "Role" : { "Fn::GetAtt":[ "ApiGatewayLambdaRole", "Arn" ] },
+        "Role" : { "Ref": "ApiGatewayCfnLambdaRole" },
         "Runtime" : "nodejs"
       }
     },
@@ -163,7 +114,7 @@
         "Handler" : "index.handler",
         "MemorySize" : 128,
         "Timeout" : 300,
-        "Role" : { "Fn::GetAtt":[ "ApiGatewayLambdaRole", "Arn" ] },
+        "Role" : { "Ref": "ApiGatewayCfnLambdaRole" },
         "Runtime" : "nodejs"
       }
     },
@@ -178,7 +129,7 @@
         "Handler" : "index.handler",
         "MemorySize" : 128,
         "Timeout" : 300,
-        "Role" : { "Fn::GetAtt":[ "ApiGatewayLambdaRole", "Arn" ] },
+        "Role" : { "Ref": "ApiGatewayCfnLambdaRole" },
         "Runtime" : "nodejs"
       }
     },
@@ -241,43 +192,6 @@
         }
       }
     },
-    "IntegrationCredentialsRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version" : "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": [
-                  "apigateway.amazonaws.com"
-                ]
-              },
-              "Action": [
-                "sts:AssumeRole"
-              ]
-            }
-          ]
-        },
-        "Path": "/",
-        "Policies": [
-          {
-            "PolicyName": "ApiGatewayIntegrationLambda",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": "lambda:InvokeFunction",
-                  "Resource": "*"
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
     "RootIntegration": {
       "DependsOn": [
         "RestApi",
@@ -300,12 +214,12 @@
               "arn:aws:apigateway:",
               { "Ref": "AWS::Region" },
               ":lambda:path/2015-03-31/functions/",
-              { "Fn:Join": ["",[{ "Ref":"AppLambdaArn" },":${stageVariables.AppVersion}" ]] },
+              { "Fn::Join": ["",[{ "Ref":"AppLambdaArn" },":${stageVariables.AppVersion}" ]] },
               "/invocations"
             ]
           ]
         },
-        "Credentials": { "Fn::GetAtt": [ "IntegrationCredentialsRole", "Arn" ] },
+        "Credentials": { "Ref": "ApiIntegrationCredentialsRole" },
         "RequestTemplates": {
           "application/json": {
             "Fn::Join": [
@@ -414,10 +328,10 @@
     "ApiName": {
       "Value": { "Ref": "RestApi"}
     },
-    "TestApiURL": {
+    "TestApiUrl": {
       "Value": { "Fn::Join": [ "", [ "https://", { "Ref": "RestApi"}, ".execute-api.",{"Ref":"AWS::Region"},".amazonaws.com/test"] ] }
     },
-    "ProdApiURL": {
+    "ProdApiUrl": {
       "Value": { "Fn::Join": [ "", [ "https://", { "Ref": "RestApi"}, ".execute-api.",{"Ref":"AWS::Region"},".amazonaws.com/prod"] ] }
     }
   }

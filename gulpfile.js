@@ -2,22 +2,30 @@
 
 var gulp        = require('gulp');
 var gutil       = require('gulp-util');
+var gcallback   = require('gulp-callback');
 var install     = require('gulp-install');
 var zip         = require('gulp-zip');
 var del         = require('del');
 var AWS         = require('aws-sdk');
 var fs          = require('fs');
+var runSequence = require('run-sequence');
 
 
 var opts = {
     region: (gutil.env.region || 'us-west-2'),
     stackName: (gutil.env.stackName || 'serverless-pipeline'),
     cfnBucket: (gutil.env.templateBucket || 'serverless-pipeline'),
+    testSiteFQDN: 'drom-test.elasticoperations.com',
+    prodSiteFQDN: 'drom-prod.elasticoperations.com',
+    distSitePath: 'dist/site.zip',
+    distLambdaPath: 'dist/lambda.zip',
+    distSwaggerPath: 'dist/swagger.json',
     githubToken: gutil.env.token,
     githubUser: 'stelligent',
     githubRepo: 'dromedary-serverless',
-    githubBranch: 'master'
+    githubBranch: 'refactor'
 }
+var util = require('./util.js')
 var gpipeline = require('.')
 gpipeline.registerTasks(gulp,opts);
 
@@ -49,58 +57,16 @@ gulp.task('lambda:zip', ['lambda:js','lambda:install'], function() {
 
 gulp.task('lambda:upload', ['lambda:gulpUpload', 'lambda:npmUpload']);
 
-gulp.task('lambda:gulpUpload', ['lambda:zip'], function(callback) {
-    gpipeline.getStack(opts.stackName,function(err, stack) {
-        if(err) {
-            callback(err);
-        } else if(!stack) {
-            callback();
-        } else {
-            var pipelineFunctionArn = stack.Outputs.filter(function (o) { return o.OutputKey == 'CodePipelineGulpLambdaArn'})[0].OutputValue;
-            var params = {
-                FunctionName: pipelineFunctionArn,
-                Publish: true,
-                ZipFile: fs.readFileSync(dist+'/pipeline-lambda.zip')
-            };
-            console.log("About to update function..."+pipelineFunctionArn);
-            lambda.updateFunctionCode(params, function(err, data) {
-                if (err) {
-                    callback(err);
-                } else {
-                    console.log("Updated lambda to version: "+data.Version);
-                    callback();
-                }
-            });
-
-        }
-    })
+gulp.task('lambda:gulpUpload', ['lambda:zip'], function() {
+    return uploadLambda('CodePipelineGulpLambdaArn');
 });
-gulp.task('lambda:npmUpload', ['lambda:zip'], function(callback) {
-    gpipeline.getStack(opts.stackName,function(err, stack) {
-        if(err) {
-            callback(err);
-        } else if(!stack) {
-            callback();
-        } else {
-            var pipelineFunctionArn = stack.Outputs.filter(function (o) { return o.OutputKey == 'CodePipelineNpmLambdaArn'})[0].OutputValue;
-            var params = {
-                FunctionName: pipelineFunctionArn,
-                Publish: true,
-                ZipFile: fs.readFileSync(dist+'/pipeline-lambda.zip')
-            };
-            console.log("About to update function..."+pipelineFunctionArn);
-            lambda.updateFunctionCode(params, function(err, data) {
-                if (err) {
-                    callback(err);
-                } else {
-                    console.log("Updated lambda to version: "+data.Version);
-                    callback();
-                }
-            });
-
-        }
-    })
+gulp.task('lambda:deployUpload', ['lambda:zip'], function() {
+    return uploadLambda('CodePipelineDeployLambdaArn');
 });
+gulp.task('lambda:npmUpload', ['lambda:zip'], function() {
+    return uploadLambda('CodePipelineNpmLambdaArn');
+});
+
 
 // Tasks to provision the pipeline
 gulp.task('cfn:templatesBucket', function(cb) {
@@ -130,19 +96,48 @@ gulp.task('cfn:templatesBucket', function(cb) {
     });
 });
 
-gulp.task('cfn:templates',['cfn:templatesBucket'], function(cb) {
+gulp.task('cfn:templates',['cfn:templatesBucket'], function() {
+    return util.uploadToS3(__dirname+'/cfn',opts.cfnBucket);
+});
+gulp.task('cfn:customResources', ['cfn:templatesBucket'], function(cb) {
+    var lambdaModules = [
+        'cfn-api-gateway-restapi',
+        'cfn-api-gateway-resource',
+        'cfn-api-gateway-method',
+        'cfn-api-gateway-method-response',
+        'cfn-api-gateway-integration',
+        'cfn-api-gateway-integration-response',
+        'cfn-api-gateway-deployment'
+
+    ];
+
     var complete = 0;
-    var dirs = [__dirname+'/cfn'];
-    dirs.forEach(function(dir) {
-        gpipeline.uploadToS3(dir,opts.cfnBucket,function(err) {
-            if(err) {
-                cb(err);
-            } else {
-                if (++complete >= dirs.length) {
-                    cb();
+    lambdaModules.forEach(function (moduleName) {
+        gulp.src([__dirname+'/node_modules/'+moduleName+'/**/*','!'+__dirname+'node_modules/'+moduleName+'/package.json','!**/aws-sdk{,/**}'])
+            .pipe(zip(moduleName+'.zip'))
+            .pipe(gulp.dest(dist))
+            .pipe(gcallback(function(err) {
+                if (err) {
+                    cb(err);
+                } else {
+                    var params = {
+                        Bucket: opts.cfnBucket,
+                        Key: moduleName + '.zip',
+                        ACL: 'public-read',
+                        Body: fs.readFileSync(dist+"/"+moduleName +'.zip')
+                    }
+
+                    s3.putObject(params, function (err, data) {
+                        if (err) {
+                            cb(err);
+                        } else {
+                            if (++complete >= lambdaModules.length) {
+                                cb();
+                            }
+                        }
+                    });
                 }
-            }
-        });
+            }));
     });
 });
 
@@ -165,7 +160,34 @@ gulp.task('lambda:uploadS3', ['lambda:zip','cfn:templatesBucket'], function(cb) 
     });
 });
 
-gulp.task('publish',['cfn:templates','lambda:uploadS3'],  function() {
+gulp.task('publish',['cfn:templates','cfn:customResources','lambda:uploadS3'],  function() {
 });
 
+gulp.task('launch',['publish'],  function(callback) {
+    runSequence('pipeline:up',callback);
+});
+
+function uploadLambda(lambdaArnOutputKey) {
+    return util.getSubStackOutput(opts.stackName,'PipelineStack',lambdaArnOutputKey)
+        .then(function(pipelineFunctionArn) {
+            var params = {
+                FunctionName: pipelineFunctionArn,
+                Publish: true,
+                ZipFile: fs.readFileSync(dist + '/pipeline-lambda.zip')
+            };
+
+            console.log("About to update function..." + pipelineFunctionArn);
+
+            return new Promise(function (resolve, reject) {
+                lambda.updateFunctionCode(params, function (err, data) {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        console.log("Updated lambda to version: " + data.Version);
+                        resolve();
+                    }
+                });
+            });
+        });
+}
 

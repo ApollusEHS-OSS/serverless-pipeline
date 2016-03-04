@@ -22,10 +22,20 @@
     "chalk": "^1.1.1"
   },
   "devDependencies": {
-    "gulp": "^3.9.0",
-    "gulp-util": "^3.0.7",
+    "cfn-api-gateway-deployment": "^0.4.0",
+    "cfn-api-gateway-integration": "^0.2.0",
+    "cfn-api-gateway-integration-response": "^0.2.2",
+    "cfn-api-gateway-method": "^0.3.0",
+    "cfn-api-gateway-method-response": "^0.2.1",
+    "cfn-api-gateway-resource": "^0.1.1",
+    "cfn-api-gateway-restapi": "^0.6.1",
     "del": "^1.2.1",
+    "gulp": "^3.9.0",
+    "gulp-callback": "0.0.3",
     "gulp-install": "^0.5.0",
-    "gulp-zip": "^3.1.0"
+    "gulp-util": "^3.0.7",
+    "gulp-zip": "^3.1.0",
+    "promise": "^7.1.1",
+    "run-sequence": "^1.1.5"
   }
 }

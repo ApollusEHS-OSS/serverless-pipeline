@@ -58,6 +58,10 @@
       "Type":"String",
       "Description":"Name of the s3 bucket for test"
     },
+    "ProdEndpoint":{
+      "Type":"String",
+      "Description":"The endpoint for testing"
+    },
     "ApiName":{
       "Type":"String",
       "Description":"Name of the api gateway"
@@ -73,6 +77,14 @@
     "CodePipelineLambdaRoleArn":{
       "Type":"String",
       "Description":"The Arn of a role for code pipeline lambda actions to run as"
+    },
+    "TestApiUrl":{
+      "Type":"String",
+      "Description":"The URL to the test api for config.json"
+    },
+    "ProdApiUrl":{
+      "Type":"String",
+      "Description":"The URL to the production api for config.json"
     }
   },
   "Mappings" : {
@@ -275,7 +287,7 @@
                   "FunctionName":{
                     "Ref":"CodePipelineDeployLambda"
                   },
-                  "UserParameters": { "Fn::Join": ["", ["type=s3&bucket=", { "Ref":"TestBucketName"}]] }
+                  "UserParameters": { "Fn::Join": ["", ["type=s3&bucket=", { "Ref":"TestBucketName"},"&apiBaseurl=",{"Fn::Join":["",[{"Ref":"TestApiUrl"},"/"]]} ]]}
                 },
                 "OutputArtifacts": [
                 ],
@@ -345,7 +357,7 @@
                     "Ref":"CodePipelineGulpLambda"
                   },
                   "UserParameters": { "Fn::Join": ["", ["task=", { "Ref":"GulpTestTask"},
-                                                        "&endpoint=", {"Ref":"TestEndpoint"}
+                                                        "&Env.TARGET_URL=", {"Ref":"TestEndpoint"}
                   ]] }
                 },
                 "OutputArtifacts": [
@@ -374,7 +386,7 @@
                   "FunctionName":{
                     "Ref":"CodePipelineDeployLambda"
                   },
-                  "UserParameters": { "Fn::Join": ["", ["type=s3&bucket=", { "Ref":"ProdBucketName"}]] }
+                  "UserParameters": { "Fn::Join": ["", ["type=s3&bucket=", { "Ref":"ProdBucketName"},"&apiBaseurl=",{"Fn::Join":["",[{"Ref":"ProdApiUrl"},"/"]]} ]]}
                 },
                 "OutputArtifacts": [
                 ],
@@ -425,6 +437,31 @@
                 "OutputArtifacts": [
                 ],
                 "RunOrder":1
+              },
+              {
+                "InputArtifacts":[
+                  {
+                    "Name": "SourceInstalledOutput"
+                  }
+                ],
+                "Name":"FunctionalTest",
+                "ActionTypeId":{
+                  "Category":"Invoke",
+                  "Owner":"AWS",
+                  "Version":"1",
+                  "Provider":"Lambda"
+                },
+                "Configuration":{
+                  "FunctionName":{
+                    "Ref":"CodePipelineGulpLambda"
+                  },
+                  "UserParameters": { "Fn::Join": ["", ["task=", { "Ref":"GulpTestTask"},
+                    "&Env.TARGET_URL=", {"Ref":"ProdEndpoint"}
+                  ]] }
+                },
+                "OutputArtifacts": [
+                ],
+                "RunOrder":2
               }
             ]
           }
@@ -445,24 +482,16 @@
       "Value" : { "Fn::GetAtt" : [ "CodePipelineGulpLambda", "Arn" ] },
       "Description" : "Gulp Lambda Arn"
     },
+    "CodePipelineDeployLambdaArn" : {
+      "Value" : { "Fn::GetAtt" : [ "CodePipelineDeployLambda", "Arn" ] },
+      "Description" : "Deploy Lambda Arn"
+    },
     "ArtifactBucket": {
       "Value": { "Ref": "ArtifactBucket" }
     },
-    "PipelineUrl": {
+    "PipelineName": {
       "Value": {
-        "Fn::Join": [
-          "",
-          [
-            "https://console.aws.amazon.com/codepipeline/home?region=",
-            {
-              "Ref": "AWS::Region"
-            },
-            "#/view/",
-            {
-              "Ref": "ServerlessPipeline"
-            }
-          ]
-        ]
+        "Ref": "ServerlessPipeline"
       }
     }
   }
