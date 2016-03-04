@@ -41,6 +41,10 @@
     "StackName":{
       "Value":{ "Ref":"AWS::StackName" }
     },
+    "AppLambdaName" : {
+      "Value" : { "Ref" : "AppLambda" },
+      "Description" : "Lambda name"
+    },
     "AppLambdaArn" : {
       "Value" : { "Fn::GetAtt" : [ "AppLambda", "Arn" ] },
       "Description" : "Lambda Arn"

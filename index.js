@@ -112,6 +112,8 @@ exports.registerTasks = function ( gulp, opts ) {
         return util.getSubStackOutput(stackName,'PipelineStack','ArtifactBucket')
             .then(function(bucketName) {
                 return util.emptyBucket(bucketName);
+            }).catch(function(){
+                return true;
             });
     });
 
