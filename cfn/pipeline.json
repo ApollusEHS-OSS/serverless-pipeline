@@ -66,9 +66,13 @@
       "Type":"String",
       "Description":"Name of the api gateway"
     },
-    "AppFunctionName":{
+    "TestAppFunctionName":{
       "Type":"String",
-      "Description":"Name of the application lambda function"
+      "Description":"Name of the test application lambda function"
+    },
+    "ProdAppFunctionName":{
+      "Type":"String",
+      "Description":"Name of the prod application lambda function"
     },
     "CodePipelineRoleArn":{
       "Type":"String",
@@ -310,7 +314,7 @@
                   "FunctionName":{
                     "Ref":"CodePipelineDeployLambda"
                   },
-                  "UserParameters": { "Fn::Join": ["", ["type=lambda&alias=test&function=", { "Ref":"AppFunctionName"}]] }
+                  "UserParameters": { "Fn::Join": ["", ["type=lambda&alias=test&function=", { "Ref":"TestAppFunctionName"}]] }
                 },
                 "OutputArtifacts": [
                 ],
@@ -409,7 +413,7 @@
                   "FunctionName":{
                     "Ref":"CodePipelineDeployLambda"
                   },
-                  "UserParameters": { "Fn::Join": ["", ["type=lambda&alias=prod&function=", { "Ref":"AppFunctionName"}]] }
+                  "UserParameters": { "Fn::Join": ["", ["type=lambda&alias=prod&function=", { "Ref":"ProdAppFunctionName"}]] }
                 },
                 "OutputArtifacts": [
                 ],

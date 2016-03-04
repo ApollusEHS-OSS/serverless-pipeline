@@ -6,9 +6,13 @@
       "Type":"String",
       "Description":"The name of the bucket to install lambdas from"
     },
-    "AppLambdaArn":{
+    "TestAppLambdaArn":{
       "Type":"String",
-      "Description":"The Arn of the lambda to integrate the gateway with"
+      "Description":"The Arn of the test lambda to integrate the gateway with"
+    },
+    "ProdAppLambdaArn":{
+      "Type":"String",
+      "Description":"The Arn of the prod lambda to integrate the gateway with"
     },
     "TestDDBTableName":{
       "Type":"String",
@@ -214,7 +218,7 @@
               "arn:aws:apigateway:",
               { "Ref": "AWS::Region" },
               ":lambda:path/2015-03-31/functions/",
-              { "Fn::Join": ["",[{ "Ref":"AppLambdaArn" },":${stageVariables.AppVersion}" ]] },
+              { "Fn::Join": [":",[ "${stageVariables.AppFunction}","${stageVariables.AppVersion}" ]] },
               "/invocations"
             ]
           ]
@@ -296,6 +300,7 @@
         "StageName": "test",
         "Variables": {
           "DDBTableName": { "Ref": "TestDDBTableName" },
+          "AppFunction": { "Ref":"TestAppLambdaArn" },
           "AppVersion": "test"
         }
       }
@@ -316,6 +321,7 @@
         "StageName": "prod",
         "Variables": {
           "DDBTableName": { "Ref": "ProdDDBTableName" },
+          "AppFunction": { "Ref":"ProdAppLambdaArn" },
           "AppVersion": "prod"
         }
       }

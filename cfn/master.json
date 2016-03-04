@@ -9,11 +9,19 @@
     },
     "TestSiteFQDN":{
       "Type":"String",
-      "Description":"Unique name to use for bucket and Route53 to serve static website content for test stage."
+      "Description":"Unique name to use for bucket and Route53 to serve static website content for test stage.",
+      "AllowedPattern":"^[a-z0-9-]+(\\.[a-z0-9-]+){2,}$",
+      "ConstraintDescription":"Must be valid hostname (like www.foo.com)"
     },
     "ProdSiteFQDN":{
       "Type":"String",
-      "Description":"Unique name to use for bucket and Route53 to serve static website content for production stage."
+      "Description":"Unique name to use for bucket and Route53 to serve static website content for production stage.",
+      "AllowedPattern":"^[a-z0-9-]+(\\.[a-z0-9-]+){2,}$",
+      "ConstraintDescription":"Must be valid hostname (like www.foo.com)"
+    },
+    "HostedZoneId":{
+      "Type":"AWS::Route53::HostedZone::Id",
+      "Description":"The existing hosted zone id to create the test and prod hostnames in."
     },
     "GitHubToken":{
       "NoEcho":"true",
@@ -66,7 +74,7 @@
       "ParameterGroups" : [
         {
           "Label" : { "default" : "App Configuration" },
-          "Parameters" : [ "TestSiteFQDN","ProdSiteFQDN" ]
+          "Parameters" : [ "TestSiteFQDN","ProdSiteFQDN","HostedZoneId" ]
         },
         {
           "Label" : { "default" : "GitHub Configuration" },
@@ -93,7 +101,8 @@
         "DistSwaggerPath":{ "default": "Path to Swagger Dist"},
         "TemplateBucketName" : { "default" : "CFN Template Bucket Name" },
         "TestSiteFQDN" : { "default" : "Test DNS Name" },
-        "ProdSiteFQDN" : { "default" : "Production DNS Name" }
+        "ProdSiteFQDN" : { "default" : "Production DNS Name" },
+        "HostedZoneId" : { "default" : "Hosted Zone" }
       }
     }
   },
@@ -172,8 +181,11 @@
           "ProdApiUrl":{
             "Fn::GetAtt" : [ "ApiGatewayStack", "Outputs.ProdApiUrl" ]
           },
-          "AppFunctionName":{
-              "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ]
+          "TestAppFunctionName":{
+            "Fn::GetAtt" : [ "TestAppStack", "Outputs.AppLambdaArn" ]
+          },
+          "ProdAppFunctionName":{
+              "Fn::GetAtt" : [ "ProdAppStack", "Outputs.AppLambdaArn" ]
           },
           "CodePipelineRoleArn":{
             "Fn::GetAtt" : [ "IAMStack", "Outputs.CodePipelineRoleArn" ]
@@ -207,13 +219,26 @@
           "BucketName":{ "Ref":"TemplateBucketName" },
           "TestDDBTableName":{ "Fn::GetAtt": ["TestDynamoDBStack", "Outputs.TableName"]},
           "ProdDDBTableName":{ "Fn::GetAtt": ["ProdDynamoDBStack", "Outputs.TableName"]},
-          "AppLambdaArn":{ "Fn::GetAtt" : [ "AppStack", "Outputs.AppLambdaArn" ] },
+          "TestAppLambdaArn":{ "Fn::GetAtt" : [ "TestAppStack", "Outputs.AppLambdaArn" ] },
+          "ProdAppLambdaArn":{ "Fn::GetAtt" : [ "ProdAppStack", "Outputs.AppLambdaArn" ] },
           "ApiGatewayCfnLambdaRole":{ "Fn::GetAtt" : [ "IAMStack", "Outputs.ApiGatewayCfnLambdaRole" ] },
           "ApiIntegrationCredentialsRole":{ "Fn::GetAtt" : [ "IAMStack", "Outputs.ApiIntegrationCredentialsRole" ] }
         }
       }
     },
-    "AppStack":{
+    "TestAppStack":{
+      "Type":"AWS::CloudFormation::Stack",
+      "Properties":{
+        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "app.json"]] },
+        "TimeoutInMinutes":"60",
+        "Parameters":{
+          "AppRole":{
+            "Fn::GetAtt" : [ "IAMStack", "Outputs.AppLambdaRoleArn" ]
+          }
+        }
+      }
+    },
+    "ProdAppStack":{
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
         "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "app.json"]] },
@@ -228,19 +253,23 @@
     "TestS3Stack":{
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
-        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "s3.json"]] },
+        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "site.json"]] },
         "TimeoutInMinutes":"60",
         "Parameters":{
-          "SiteBucketName":{ "Ref":"TestSiteFQDN" } }
+          "HostedZoneId":{ "Ref":"HostedZoneId" },
+          "SiteBucketName":{ "Ref":"TestSiteFQDN" }
+        }
       }
     },
     "ProdS3Stack":{
       "Type":"AWS::CloudFormation::Stack",
       "Properties":{
-        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "s3.json"]] },
+        "TemplateURL": { "Fn::Join": ["/", [{ "Fn::FindInMap":[ "EndpointMap", { "Ref":"AWS::Region" }, "s3" ] }, { "Ref":"TemplateBucketName"}, "site.json"]] },
         "TimeoutInMinutes":"60",
         "Parameters":{
-          "SiteBucketName":{ "Ref":"ProdSiteFQDN" } }
+          "HostedZoneId":{ "Ref":"HostedZoneId" },
+          "SiteBucketName":{ "Ref":"ProdSiteFQDN" }
+        }
       }
     },
     "IAMStack":{

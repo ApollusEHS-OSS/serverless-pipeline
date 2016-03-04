@@ -17,6 +17,7 @@ var opts = {
     cfnBucket: (gutil.env.templateBucket || 'serverless-pipeline'),
     testSiteFQDN: 'drom-test.elasticoperations.com',
     prodSiteFQDN: 'drom-prod.elasticoperations.com',
+    hostedZoneId: 'Z3809G91N7QZJE', //TODO: get this programatically
     distSitePath: 'dist/site.zip',
     distLambdaPath: 'dist/lambda.zip',
     distSwaggerPath: 'dist/swagger.json',

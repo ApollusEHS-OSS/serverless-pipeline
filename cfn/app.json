@@ -6,11 +6,6 @@
       "Type":"String",
       "Description":"The role for the function to run as."
     },
-    "AppFunctionName":{
-      "Type":"String",
-      "Description":"The name to use for the app lambda function.",
-      "Default":"AppLambda"
-    },
     "AppTimeout":{
       "Type":"Number",
       "Description":"The name to use for the app lambda function.",

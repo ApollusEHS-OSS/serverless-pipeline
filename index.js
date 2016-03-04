@@ -61,6 +61,10 @@ exports.registerTasks = function ( gulp, opts ) {
                         ParameterValue: opts.gulpTestTask
                     },
                     {
+                        ParameterKey: "HostedZoneId",
+                        ParameterValue: opts.hostedZoneId
+                    },
+                    {
                         ParameterKey: "TestSiteFQDN",
                         ParameterValue: opts.testSiteFQDN
                     },
@@ -120,15 +124,16 @@ exports.registerTasks = function ( gulp, opts ) {
     });
 
     gulp.task(taskPrefix+':down', [taskPrefix+':emptyArtifacts',taskPrefix+':emptyTestSite',taskPrefix+':emptyProdSite'], function(cb) {
-        return getStack(stackName, function(err) {
-            if (err) { throw err; }
-
-            cloudFormation.deleteStack({StackName: stackName}, function(err) {
-                if (err) {
-                    throw err;
-                }
-                console.log('Stack deletion in progress.');
-                cb();
+        return util.getStack(stackName).then(function() {
+            return new Promise(function(resolve,reject) {
+                cloudFormation.deleteStack({StackName: stackName}, function(err) {
+                    if(err)
+                        reject(err);
+                    else {
+                        console.log('Stack deletion in progress.');
+                        resolve();
+                    }
+                });
             });
         });
     });
